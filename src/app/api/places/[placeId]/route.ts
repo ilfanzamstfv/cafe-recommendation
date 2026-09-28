@@ -1,5 +1,6 @@
 import { fail, ok } from "@/lib/http/api-response";
 import { getCafeByPlaceId } from "@/lib/google-places/client";
+import { isAuthFailure, requireAuth } from "@/lib/supabase/server";
 import { coordinatesSchema, searchParamsToObject } from "@/lib/validation/schemas";
 
 type RouteContext = {
@@ -9,6 +10,12 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, context: RouteContext) {
+  const auth = await requireAuth(request);
+
+  if (isAuthFailure(auth)) {
+    return auth;
+  }
+
   const { placeId } = await context.params;
   const url = new URL(request.url);
   const parsed = coordinatesSchema.partial().safeParse(searchParamsToObject(url.searchParams));
@@ -34,6 +41,7 @@ export async function GET(request: Request, context: RouteContext) {
 
     return ok({
       source: result.source,
+      userId: auth.user.id,
       cafe: result.cafe,
     });
   } catch {

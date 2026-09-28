@@ -38,6 +38,13 @@ export type Cafe = {
   distanceKm?: number;
 };
 
+export type UserInteractionSignal = {
+  likedPlaceIds: string[];
+  savedPlaceIds: string[];
+  visitedPlaceIds: string[];
+  notInterestedPlaceIds: string[];
+};
+
 export type RecommendationBreakdown = {
   rating: number;
   distance: number;
@@ -45,6 +52,7 @@ export type RecommendationBreakdown = {
   popularity: number;
   price: number;
   openStatus: number;
+  interaction: number;
 };
 
 export type RecommendedCafe = Cafe & {

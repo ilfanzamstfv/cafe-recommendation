@@ -9,12 +9,9 @@ export const nearbyQuerySchema = coordinatesSchema.extend({
   radius: z.coerce.number().positive().max(10000).default(3000),
 });
 
-export const recommendationQuerySchema = nearbyQuerySchema.extend({
-  userId: z.string().min(1).default("demo-user"),
-});
+export const recommendationQuerySchema = nearbyQuerySchema;
 
 export const preferenceSchema = z.object({
-  userId: z.string().min(1).default("demo-user"),
   maxDistanceKm: z.coerce.number().positive().max(10),
   minimumRating: z.coerce.number().min(1).max(5),
   preferredPrice: z.enum(["BUDGET", "MEDIUM", "PREMIUM", "ANY"]),
@@ -24,13 +21,11 @@ export const preferenceSchema = z.object({
 });
 
 export const interactionSchema = z.object({
-  userId: z.string().min(1).default("demo-user"),
   placeId: z.string().min(1),
   interactionType: z.enum(["LIKE", "SAVE", "VISITED", "NOT_INTERESTED"]),
 });
 
 export const favoriteSchema = z.object({
-  userId: z.string().min(1).default("demo-user"),
   placeId: z.string().min(1),
 });
 

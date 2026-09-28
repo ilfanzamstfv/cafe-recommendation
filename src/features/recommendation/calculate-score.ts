@@ -1,4 +1,4 @@
-import type { Cafe, RecommendedCafe, UserPreference } from "@/types/cafe";
+import type { Cafe, RecommendedCafe, UserInteractionSignal, UserPreference } from "@/types/cafe";
 import { getDistanceScore } from "@/features/recommendation/distance-score";
 import { getPopularityScore } from "@/features/recommendation/popularity-score";
 import { getPreferenceScore } from "@/features/recommendation/preference-score";
@@ -22,7 +22,27 @@ function formatDistance(distanceKm: number | undefined) {
   return `${distanceKm.toFixed(1)} km from you`;
 }
 
-function getReasons(cafe: Cafe, preference: UserPreference) {
+function getInteractionScore(cafe: Cafe, signal?: UserInteractionSignal) {
+  if (!signal) {
+    return 50;
+  }
+
+  if (signal.notInterestedPlaceIds.includes(cafe.placeId)) {
+    return 0;
+  }
+
+  if (signal.likedPlaceIds.includes(cafe.placeId) || signal.savedPlaceIds.includes(cafe.placeId)) {
+    return 100;
+  }
+
+  if (signal.visitedPlaceIds.includes(cafe.placeId)) {
+    return 80;
+  }
+
+  return 50;
+}
+
+function getReasons(cafe: Cafe, preference: UserPreference, signal?: UserInteractionSignal) {
   const reasons: string[] = [];
   const distanceReason = formatDistance(cafe.distanceKm);
 
@@ -46,10 +66,22 @@ function getReasons(cafe: Cafe, preference: UserPreference) {
     reasons.push(`Aligned with ${preference.purposes.join(", ").toLowerCase()} preference`);
   }
 
+  if (signal?.likedPlaceIds.includes(cafe.placeId) || signal?.savedPlaceIds.includes(cafe.placeId)) {
+    reasons.push("Based on your previous interest");
+  }
+
+  if (signal?.notInterestedPlaceIds.includes(cafe.placeId)) {
+    reasons.push("Ranked lower because you marked it not interested");
+  }
+
   return reasons;
 }
 
-export function calculateRecommendation(cafe: Cafe, preference: UserPreference): RecommendedCafe {
+export function calculateRecommendation(
+  cafe: Cafe,
+  preference: UserPreference,
+  signal?: UserInteractionSignal,
+): RecommendedCafe {
   const scoreBreakdown = {
     rating: getRatingScore(cafe.rating),
     distance: getDistanceScore(cafe.distanceKm),
@@ -57,9 +89,10 @@ export function calculateRecommendation(cafe: Cafe, preference: UserPreference):
     popularity: getPopularityScore(cafe.userRatingCount),
     price: getPriceScore(cafe.priceLevel, preference.preferredPrice),
     openStatus: cafe.isOpenNow ? 100 : 0,
+    interaction: getInteractionScore(cafe, signal),
   };
 
-  const recommendationScore = Math.round(
+  const baseScore = Math.round(
     scoreBreakdown.rating * weights.rating +
       scoreBreakdown.distance * weights.distance +
       scoreBreakdown.preference * weights.preference +
@@ -67,17 +100,19 @@ export function calculateRecommendation(cafe: Cafe, preference: UserPreference):
       scoreBreakdown.price * weights.price +
       scoreBreakdown.openStatus * weights.openStatus,
   );
+  const interactionAdjustment = Math.round((scoreBreakdown.interaction - 50) * 0.3);
+  const recommendationScore = Math.max(0, Math.min(100, baseScore + interactionAdjustment));
 
   return {
     ...cafe,
     recommendationScore,
     scoreBreakdown,
-    reasons: getReasons(cafe, preference),
+    reasons: getReasons(cafe, preference, signal),
   };
 }
 
-export function rankCafes(cafes: Cafe[], preference: UserPreference) {
+export function rankCafes(cafes: Cafe[], preference: UserPreference, signal?: UserInteractionSignal) {
   return cafes
-    .map((cafe) => calculateRecommendation(cafe, preference))
+    .map((cafe) => calculateRecommendation(cafe, preference, signal))
     .sort((a, b) => b.recommendationScore - a.recommendationScore);
 }

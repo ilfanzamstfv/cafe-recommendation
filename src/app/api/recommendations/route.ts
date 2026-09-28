@@ -1,10 +1,17 @@
 import { rankCafes } from "@/features/recommendation/calculate-score";
-import { getPreference } from "@/features/user/demo-store";
+import { getInteractionSignal, getPreference } from "@/features/user/user-store";
 import { fail, ok } from "@/lib/http/api-response";
 import { getNearbyCafes } from "@/lib/google-places/client";
+import { isAuthFailure, requireAuth } from "@/lib/supabase/server";
 import { recommendationQuerySchema, searchParamsToObject } from "@/lib/validation/schemas";
 
 export async function GET(request: Request) {
+  const auth = await requireAuth(request);
+
+  if (isAuthFailure(auth)) {
+    return auth;
+  }
+
   const url = new URL(request.url);
   const parsed = recommendationQuerySchema.safeParse(searchParamsToObject(url.searchParams));
 
@@ -13,15 +20,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { latitude, longitude, radius, userId } = parsed.data;
-    const preference = getPreference(userId);
+    const { latitude, longitude, radius } = parsed.data;
+    const preference = await getPreference(auth);
+    const interactionSignal = await getInteractionSignal(auth);
     const nearby = await getNearbyCafes({ latitude, longitude }, radius);
-    const cafes = rankCafes(nearby.cafes, preference);
+    const cafes = rankCafes(nearby.cafes, preference, interactionSignal);
 
     return ok({
       source: nearby.source,
-      userId,
+      userId: auth.user.id,
       preference,
+      interactionSignal,
       cafes,
     });
   } catch {
