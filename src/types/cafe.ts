@@ -15,6 +15,11 @@ export type Coordinates = {
   longitude: number;
 };
 
+export type PhotoAttribution = {
+  displayName: string;
+  uri?: string;
+};
+
 export type UserPreference = {
   userId: string;
   maxDistanceKm: number;
@@ -34,6 +39,7 @@ export type Cafe = {
   isOpenNow: boolean | null;
   primaryType: string | null;
   photoName: string | null;
+  photoAttributions?: PhotoAttribution[];
   googleMapsUri: string | null;
   distanceKm?: number;
 };

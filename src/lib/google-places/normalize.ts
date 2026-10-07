@@ -21,6 +21,10 @@ type GooglePlace = {
   primaryType?: string;
   photos?: Array<{
     name?: string;
+    authorAttributions?: Array<{
+      displayName?: string;
+      uri?: string;
+    }>;
   }>;
   googleMapsUri?: string;
 };
@@ -72,6 +76,11 @@ export function normalizeGooglePlace(place: GooglePlace): Cafe | null {
       place.currentOpeningHours?.openNow ?? place.regularOpeningHours?.openNow ?? null,
     primaryType: place.primaryType ?? null,
     photoName: place.photos?.[0]?.name ?? null,
+    photoAttributions: place.photos?.[0]?.authorAttributions?.flatMap((attribution) =>
+      attribution.displayName
+        ? [{ displayName: attribution.displayName, ...(attribution.uri ? { uri: attribution.uri } : {}) }]
+        : [],
+    ),
     googleMapsUri: place.googleMapsUri ?? null,
   };
 }

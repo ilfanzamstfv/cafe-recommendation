@@ -76,9 +76,7 @@ export async function getNearbyCafes(origin: Coordinates, radiusMeters: number) 
         },
       },
     }),
-    next: {
-      revalidate: 300,
-    },
+    cache: "no-store",
   });
 
   if (!response.ok) {
@@ -119,9 +117,7 @@ export async function getCafeByPlaceId(placeId: string, origin?: Coordinates) {
       "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask": DETAILS_FIELD_MASK,
     },
-    next: {
-      revalidate: 300,
-    },
+    cache: "no-store",
   });
 
   if (!response.ok) {
