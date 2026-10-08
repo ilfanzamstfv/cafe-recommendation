@@ -32,10 +32,6 @@ input {
   font: inherit;
 }
 
-a {
-  color: inherit;
-}
-
 @keyframes dashboard-tab-enter {
   from {
     opacity: 0;

@@ -62,8 +62,9 @@ export function SavedTab({
               token={token}
               isSaved={savedIds.includes(cafe.placeId)}
               isLiked={likedIds.includes(cafe.placeId)}
-              busy={busyPlaceId === cafe.placeId || detailsLoadingId === cafe.placeId}
+              busy={Boolean(busyPlaceId) || detailsLoadingId === cafe.placeId}
               detailsLoading={detailsLoadingId === cafe.placeId}
+              showDismiss={false}
               onDetails={() => onDetails(cafe)}
               onSave={() => onSave(cafe)}
               onLike={() => onLike(cafe)}

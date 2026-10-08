@@ -1,4 +1,5 @@
 import { rankCafes } from "@/features/recommendation/calculate-score";
+import { excludeNotInterestedCafes } from "@/features/recommendation/exclude-not-interested";
 import { getInteractionSignal, getPreference } from "@/features/user/user-store";
 import { fail, ok } from "@/lib/http/api-response";
 import { getNearbyCafes } from "@/lib/google-places/client";
@@ -24,7 +25,8 @@ export async function GET(request: Request) {
     const preference = await getPreference(auth);
     const interactionSignal = await getInteractionSignal(auth);
     const nearby = await getNearbyCafes({ latitude, longitude }, radius);
-    const cafes = rankCafes(nearby.cafes, preference, interactionSignal);
+    const availableCafes = excludeNotInterestedCafes(nearby.cafes, interactionSignal.notInterestedPlaceIds);
+    const cafes = rankCafes(availableCafes, preference, interactionSignal);
 
     return ok({
       source: nearby.source,

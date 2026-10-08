@@ -38,7 +38,7 @@ create table if not exists public.user_cafe_interactions (
   interaction_type text not null,
   created_at timestamptz not null default now(),
   constraint user_cafe_interactions_type_check check (
-    interaction_type in ('LIKE', 'SAVE', 'VISITED', 'NOT_INTERESTED')
+    interaction_type in ('LIKE', 'UNLIKE', 'SAVE', 'VISITED', 'NOT_INTERESTED')
   )
 );
 

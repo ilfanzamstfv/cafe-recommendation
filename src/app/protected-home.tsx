@@ -10,6 +10,8 @@ import {
   Heart,
   History as HistoryIcon,
   LogOut,
+  MapPin,
+  Star,
   UserRound,
   X,
 } from "lucide-react";
@@ -29,7 +31,7 @@ import { DiscoverTab } from "@/app/pages/discover";
 import { HistoryTab } from "@/app/pages/history";
 import { ProfileTab } from "@/app/pages/profile";
 import { SavedTab } from "@/app/pages/saved";
-import { formatCount, formatDistance, formatPrice, getMapUrl, SkeletonRows } from "@/features/dashboard/shared";
+import { CafePhoto, formatCount, formatDistance, formatPrice, getMapUrl, SkeletonRows } from "@/features/dashboard/shared";
 import type { CafeDetail, HistoryEntry, Tab } from "@/features/dashboard/types";
 
 type ApiResponse<T> =
@@ -64,15 +66,21 @@ async function apiRequest<T>(token: string, path: string, init: RequestInit = {}
 }
 
 function CafeDetailDialog({
+  token,
   cafe,
   isSaved,
+  isLiked,
+  busy,
   onClose,
   onSave,
   onLike,
   onVisited,
 }: {
+  token: string;
   cafe: CafeDetail;
   isSaved: boolean;
+  isLiked: boolean;
+  busy: boolean;
   onClose: () => void;
   onSave: () => void;
   onLike: () => void;
@@ -92,46 +100,76 @@ function CafeDetailDialog({
       ref={dialogRef}
       onClose={onClose}
       aria-labelledby="cafe-detail-title"
-      className="m-auto max-h-[min(88dvh,760px)] w-[calc(100%-1rem)] max-w-xl overflow-y-auto rounded-lg border-0 bg-white p-0 text-[#373d20] shadow-xl backdrop:bg-[#373d20]/55"
+      className="m-auto max-h-[min(92dvh,860px)] w-[calc(100%-1rem)] max-w-2xl overflow-x-hidden overflow-y-auto rounded-lg border-0 bg-white p-0 text-[#373d20] shadow-xl backdrop:bg-[#373d20]/55"
     >
-      <div className="flex items-start justify-between gap-4 border-b border-[#bcbd8b]/70 p-5 sm:p-7">
-        <div>
-          <p className="m-0 text-xs font-semibold uppercase text-[#717744]">Cafe details</p>
-          <h2 id="cafe-detail-title" className="mb-0 mt-2 text-2xl font-bold leading-tight">{cafe.name}</h2>
+      <div className="relative">
+        <CafePhoto cafe={cafe} token={token} />
+        <div className="absolute left-3 top-3 flex flex-wrap gap-2 pr-14">
+          <span className={`rounded-md px-3 py-1.5 text-xs font-bold ${cafe.isOpenNow === true ? "bg-[#373d20] text-white" : cafe.isOpenNow === false ? "bg-[#3d0814] text-white" : "bg-white/95 text-[#373d20]"}`}>
+            {cafe.isOpenNow === true ? "Open now" : cafe.isOpenNow === false ? "Closed" : "Hours unavailable"}
+          </span>
+          {cafe.recommendationScore !== undefined && <span className="rounded-md bg-[#3d0814] px-3 py-1.5 text-xs font-bold text-white">{cafe.recommendationScore}% match</span>}
         </div>
-        <button type="button" onClick={() => dialogRef.current?.close()} aria-label="Close details" className="grid size-11 shrink-0 place-items-center rounded-md text-[#717744] hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744]">
+        <button type="button" onClick={() => dialogRef.current?.close()} aria-label="Close details" className="absolute right-3 top-3 grid size-11 place-items-center rounded-full bg-white/95 text-[#373d20] shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744]">
           <X size={20} aria-hidden="true" />
         </button>
       </div>
-      <div className="space-y-6 p-5 sm:p-7">
-        <div className="grid grid-cols-2 gap-y-4 border-b border-[#bcbd8b]/70 pb-5 text-sm">
-          <span className="text-[#717744]">Rating</span><span className="text-right font-semibold">{cafe.rating?.toFixed(1) ?? "Not available"} {cafe.rating !== null ? `(${formatCount(cafe.userRatingCount)} reviews)` : ""}</span>
-          <span className="text-[#717744]">Distance</span><span className="text-right font-semibold">{formatDistance(cafe.distanceKm) ?? "Not available"}</span>
-          <span className="text-[#717744]">Price</span><span className="text-right font-semibold">{formatPrice(cafe.priceLevel)}</span>
-          <span className="text-[#717744]">Status</span><span className="text-right font-semibold">{cafe.isOpenNow === true ? "Open now" : cafe.isOpenNow === false ? "Closed" : "Hours unavailable"}</span>
-          {cafe.recommendationScore !== undefined && <><span className="text-[#717744]">Recommendation match</span><span className="text-right font-bold text-[#3d0814]">{cafe.recommendationScore}%</span></>}
+      <div className="p-4 sm:p-6">
+        <header>
+          {cafe.primaryType && <p className="mb-1 text-xs font-semibold uppercase text-[#717744]">{cafe.primaryType.replace(/_/g, " ")}</p>}
+          <h2 id="cafe-detail-title" className="m-0 text-2xl font-bold leading-tight sm:text-3xl">{cafe.name}</h2>
+        </header>
+
+        <div className="mt-5 grid grid-cols-3 divide-x divide-[#bcbd8b]/70 border-y border-[#bcbd8b]/70 py-3">
+          <div className="min-w-0 px-2 first:pl-0">
+            <p className="m-0 text-xs text-[#717744]">Rating</p>
+            <p className="mb-0 mt-1 flex items-center gap-1 text-sm font-bold text-[#373d20]">
+              {cafe.rating !== null ? <><Star size={15} fill="currentColor" aria-hidden="true" />{cafe.rating.toFixed(1)}</> : "Unavailable"}
+            </p>
+            {cafe.rating !== null && <p className="m-0 mt-0.5 text-xs text-[#717744]">{formatCount(cafe.userRatingCount)} reviews</p>}
+          </div>
+          <div className="min-w-0 px-2">
+            <p className="m-0 text-xs text-[#717744]">Distance</p>
+            <p className="mb-0 mt-1 text-sm font-bold text-[#373d20]">{formatDistance(cafe.distanceKm) ?? "Unavailable"}</p>
+          </div>
+          <div className="min-w-0 px-2 pr-0">
+            <p className="m-0 text-xs text-[#717744]">Price</p>
+            <p className="mb-0 mt-1 break-words text-sm font-bold text-[#373d20]">{formatPrice(cafe.priceLevel)}</p>
+          </div>
         </div>
+
+        <div className="mt-4 flex items-start gap-3">
+          <MapPin size={19} className="mt-0.5 shrink-0 text-[#717744]" aria-hidden="true" />
+          <div>
+            <p className="m-0 text-sm font-semibold">Location</p>
+            <p className="mb-0 mt-1 text-sm text-[#717744]">{cafe.location.latitude.toFixed(5)}, {cafe.location.longitude.toFixed(5)}</p>
+          </div>
+        </div>
+
         {cafe.reasons && cafe.reasons.length > 0 && (
-          <section>
-            <h3 className="m-0 text-base font-bold">Why it fits</h3>
-            <ul className="mb-0 mt-3 space-y-2 pl-5 text-sm leading-6 text-[#717744]">
-              {cafe.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+          <section className="mt-5">
+            <h3 className="m-0 text-sm font-bold">Why it fits</h3>
+            <ul className="mb-0 mt-2 flex flex-wrap gap-2 p-0 text-sm text-[#373d20]">
+              {cafe.reasons.map((reason) => <li key={reason} className="list-none rounded-md bg-[#eff1ed] px-3 py-2">{reason}</li>)}
             </ul>
           </section>
         )}
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={onVisited} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#373d20] px-4 text-sm font-semibold text-white hover:bg-[#4a5230] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] focus-visible:ring-offset-2">
-            <Check size={17} aria-hidden="true" /> Mark visited
-          </button>
-          <button type="button" onClick={onLike} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#717744]/40 px-4 text-sm font-semibold hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] focus-visible:ring-offset-2">
-            <Heart size={17} aria-hidden="true" /> Like
-          </button>
-          <button type="button" onClick={onSave} aria-pressed={isSaved} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#717744]/40 px-4 text-sm font-semibold hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] focus-visible:ring-offset-2">
-            <Bookmark size={17} fill={isSaved ? "currentColor" : "none"} aria-hidden="true" /> {isSaved ? "Saved" : "Save"}
-          </button>
-          <a href={getMapUrl(cafe)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-semibold text-[#717744] hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744]">
+
+        <div className="mt-5 space-y-2 border-t border-[#bcbd8b]/70 pt-4">
+          <a href={getMapUrl(cafe)} target="_blank" rel="noreferrer" className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-[#373d20] px-4 text-sm font-semibold text-white hover:bg-[#4a5230] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] focus-visible:ring-offset-2">
             Open in Maps <ExternalLink size={16} aria-hidden="true" />
           </a>
+          <div className="grid grid-cols-3 gap-2">
+            <button type="button" onClick={onVisited} disabled={busy} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-[#717744]/35 px-2 text-xs font-semibold text-[#373d20] hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] disabled:cursor-wait disabled:opacity-60 sm:text-sm">
+              <Check size={16} aria-hidden="true" /> Visited
+            </button>
+            <button type="button" onClick={onLike} aria-pressed={isLiked} disabled={busy} className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] disabled:cursor-wait disabled:opacity-60 sm:text-sm ${isLiked ? "border-[#717744] bg-[#bcbd8b]/35 text-[#373d20]" : "border-[#717744]/35 text-[#373d20] hover:bg-[#eff1ed]"}`}>
+              <Heart size={16} fill={isLiked ? "currentColor" : "none"} aria-hidden="true" /> {isLiked ? "Unlike" : "Like"}
+            </button>
+            <button type="button" onClick={onSave} aria-pressed={isSaved} disabled={busy} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-[#717744]/35 px-2 text-xs font-semibold text-[#373d20] hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] disabled:cursor-wait disabled:opacity-60 sm:text-sm">
+              <Bookmark size={16} fill={isSaved ? "currentColor" : "none"} aria-hidden="true" /> {isSaved ? "Saved" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </dialog>
@@ -173,7 +211,6 @@ function LogoutDialog({
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="m-0 text-xs font-semibold uppercase text-[#717744]">Cafinity account</p>
             <h2 id="logout-title" className="mb-0 mt-2 text-xl font-bold">Sign out?</h2>
           </div>
           <button type="button" onClick={() => dialogRef.current?.close()} disabled={busy} aria-label="Close sign out confirmation" className="grid size-11 shrink-0 place-items-center rounded-md text-[#717744] hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] disabled:opacity-50">
@@ -184,7 +221,7 @@ function LogoutDialog({
         {error && <p role="alert" className="mb-0 mt-3 text-sm text-[#3d0814]">{error}</p>}
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" onClick={() => dialogRef.current?.close()} disabled={busy} className="min-h-11 rounded-md border border-[#717744]/35 px-4 text-sm font-semibold hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] disabled:opacity-50">Cancel</button>
-          <button type="button" onClick={onConfirm} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#3d0814] px-4 text-sm font-semibold text-white hover:bg-[#571324] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3d0814] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60">
+          <button type="button" onClick={onConfirm} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60">
             <LogOut size={16} aria-hidden="true" />{busy ? "Signing out..." : "Sign out"}
           </button>
         </div>
@@ -198,8 +235,6 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
-  const [latitudeInput, setLatitudeInput] = useState("");
-  const [longitudeInput, setLongitudeInput] = useState("");
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [locationMessage, setLocationMessage] = useState("");
@@ -218,7 +253,6 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
-  const [preference, setPreference] = useState<UserPreference | null>(null);
   const [preferenceDraft, setPreferenceDraft] = useState<UserPreference | null>(null);
   const [preferenceLoading, setPreferenceLoading] = useState(false);
   const [preferenceSaving, setPreferenceSaving] = useState(false);
@@ -232,7 +266,11 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
   const [detailsLoadingId, setDetailsLoadingId] = useState("");
   const supabaseRef = useRef<ReturnType<typeof createBrowserSupabaseClient> | null>(null);
   const locationRequestIdRef = useRef(0);
+  const interactionBusyRef = useRef(false);
   const autoLocationRequestedRef = useRef(false);
+  const userName = [session?.user.user_metadata.name, session?.user.user_metadata.full_name]
+    .find((name): name is string => typeof name === "string" && name.trim().length > 0)
+    ?.trim() || session?.user.email?.split("@")[0] || "there";
 
   useEffect(() => {
     let mounted = true;
@@ -289,8 +327,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
       }>(token, `/api/recommendations?${params}`);
       setCafes(result.cafes);
       setSource(result.source);
-      setPreference(result.preference);
-      setPreferenceDraft(result.preference);
+      setPreferenceDraft((current) => current ?? result.preference);
       setSavedIds(result.interactionSignal.savedPlaceIds);
       setLikedIds(result.interactionSignal.likedPlaceIds);
     } catch {
@@ -305,7 +342,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
     setLocationError("");
     setLocationMessage("");
     if (!navigator.geolocation) {
-      setLocationError("This browser does not support location. Enter coordinates manually.");
+      setLocationError("This browser does not support location. Try another browser.");
       return;
     }
 
@@ -321,20 +358,18 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
         setLocationBusy(false);
         // ponytail: fixed 100 m jitter filter; use GPS accuracy if device noise causes excess searches.
         if (coordinates && getDistanceKm(coordinates, origin) < 0.1) {
-          setLocationMessage("Location is within 100 m of the current coordinates. Use Search cafes to query again.");
+          setLocationMessage("Your location is within 100 m of the current search area.");
           return;
         }
         setCoordinates(origin);
-        setLatitudeInput(String(origin.latitude));
-        setLongitudeInput(String(origin.longitude));
         void loadRecommendations(session.access_token, origin, radius);
       },
       (error) => {
         if (requestId !== locationRequestIdRef.current) return;
         setLocationBusy(false);
         setLocationError(error.code === error.PERMISSION_DENIED
-          ? "Izin lokasi ditolak. Masukkan koordinat secara manual untuk mencari café."
-          : "Lokasi tidak berhasil diperoleh. Coba lagi atau masukkan koordinat manual.");
+          ? "Location permission denied. Allow location access in browser settings, then try again."
+          : "Location could not be obtained. Try again.");
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
@@ -345,25 +380,6 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
     autoLocationRequestedRef.current = true;
     useCurrentLocation();
   }, [activeTab, authLoading, session, useCurrentLocation]);
-
-  function submitManualLocation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!session) return;
-    locationRequestIdRef.current += 1;
-    setLocationBusy(false);
-    setLocationMessage("");
-    const latitude = Number(latitudeInput);
-    const longitude = Number(longitudeInput);
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-      setLocationError("Enter a latitude from -90 to 90 and a longitude from -180 to 180.");
-      return;
-    }
-    const origin = { latitude, longitude };
-    setCoordinates(origin);
-    setLocationError("");
-    setLocationMessage("");
-    void loadRecommendations(session.access_token, origin, radius);
-  }
 
   function updateRadius(distance: number) {
     setRadius(distance);
@@ -382,7 +398,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
       const query = params.toString();
       const result = await apiRequest<{ cafes: Cafe[]; placeIds: string[] }>(token, `/api/favorites${query ? `?${query}` : ""}`);
       setFavorites(result.cafes);
-      setSavedIds((current) => Array.from(new Set([...current, ...result.placeIds])));
+      setSavedIds(result.placeIds);
     } catch {
       setFavoritesError("Saved cafés could not be loaded. Try again.");
     } finally {
@@ -408,7 +424,6 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
     setPreferenceError("");
     try {
       const result = await apiRequest<{ preference: UserPreference }>(token, "/api/preferences");
-      setPreference(result.preference);
       setPreferenceDraft(result.preference);
     } catch {
       setPreferenceError("Preferences could not be loaded. Try again.");
@@ -420,7 +435,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
   function loadTabData(tab: Tab, token: string) {
     if (tab === "favorites" && favorites === null && !favoritesLoading) void loadFavorites(token);
     if (tab === "history" && history === null && !historyLoading) void loadHistory(token);
-    if (tab === "profile" && preferenceDraft === null && !preferenceLoading) void loadPreference(token);
+    if (tab === "discover" && preferenceDraft === null && !preferenceLoading) void loadPreference(token);
   }
 
   function selectTab(tab: Tab) {
@@ -430,7 +445,8 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
   }
 
   async function performInteraction(cafe: CafeDetail, interactionType: InteractionType) {
-    if (!session) return;
+    if (!session || interactionBusyRef.current) return;
+    interactionBusyRef.current = true;
     setBusyPlaceId(cafe.placeId);
     setActionError("");
     try {
@@ -440,6 +456,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
       });
       setHistory(null);
       if (interactionType === "LIKE") setLikedIds((current) => current.includes(cafe.placeId) ? current : [...current, cafe.placeId]);
+      if (interactionType === "UNLIKE") setLikedIds((current) => current.filter((id) => id !== cafe.placeId));
       if (interactionType === "SAVE") {
         setSavedIds((current) => current.includes(cafe.placeId) ? current : [...current, cafe.placeId]);
         setFavorites(null);
@@ -449,12 +466,18 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
     } catch {
       setActionError("Your action could not be saved. Check your connection and try again.");
     } finally {
+      interactionBusyRef.current = false;
       setBusyPlaceId("");
     }
   }
 
+  function toggleLike(cafe: CafeDetail) {
+    return performInteraction(cafe, likedIds.includes(cafe.placeId) ? "UNLIKE" : "LIKE");
+  }
+
   async function toggleFavorite(cafe: CafeDetail) {
-    if (!session) return;
+    if (!session || interactionBusyRef.current) return;
+    interactionBusyRef.current = true;
     setBusyPlaceId(cafe.placeId);
     const currentlySaved = savedIds.includes(cafe.placeId);
     setActionError("");
@@ -476,6 +499,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
     } catch {
       setActionError("The saved status could not be changed. Check your connection and try again.");
     } finally {
+      interactionBusyRef.current = false;
       setBusyPlaceId("");
     }
   }
@@ -528,10 +552,11 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
           purposes: preferenceDraft.purposes,
         }),
       });
-      setPreference(result.preference);
       setPreferenceDraft(result.preference);
       setPreferenceMessage("Preferences saved.");
-      if (coordinates) await loadRecommendations(session.access_token, coordinates, radius);
+      const nextRadius = result.preference.maxDistanceKm * 1000;
+      setRadius(nextRadius);
+      if (coordinates) await loadRecommendations(session.access_token, coordinates, nextRadius);
     } catch {
       setPreferenceError("Preferences could not be saved. Check your connection and try again.");
     } finally {
@@ -589,9 +614,6 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
               </button>
             ))}
           </nav>
-          <button type="button" onClick={() => { setLogoutError(""); setLogoutDialogOpen(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-semibold text-[#717744] hover:bg-[#eff1ed] hover:text-[#373d20] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744]">
-            <LogOut size={17} aria-hidden="true" /><span className="hidden sm:inline">Sign out</span>
-          </button>
         </div>
       </header>
 
@@ -601,9 +623,8 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
           {activeTab === "discover" && (
             <DiscoverTab
               token={session.access_token}
+              userName={userName}
               coordinates={coordinates}
-              latitudeInput={latitudeInput}
-              longitudeInput={longitudeInput}
               locationBusy={locationBusy}
               locationError={locationError}
               locationMessage={locationMessage}
@@ -616,18 +637,23 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
               likedIds={likedIds}
               busyPlaceId={busyPlaceId}
               detailsLoadingId={detailsLoadingId}
-              preference={preference}
+              preferenceDraft={preferenceDraft}
+              preferenceLoading={preferenceLoading}
+              preferenceSaving={preferenceSaving}
+              preferenceMessage={preferenceMessage}
+              preferenceError={preferenceError}
               mobileView={mobileView}
-              onLatitudeChange={setLatitudeInput}
-              onLongitudeChange={setLongitudeInput}
               onRadiusChange={updateRadius}
               onMobileViewChange={setMobileView}
               onUseCurrentLocation={useCurrentLocation}
-              onManualLocationSubmit={submitManualLocation}
               onRetrySearch={() => { if (coordinates) void loadRecommendations(session.access_token, coordinates, radius); }}
+              onSavePreferences={savePreferences}
+              onRetryPreferences={() => void loadPreference(session.access_token)}
+              onTogglePurpose={togglePurpose}
+              onUpdatePreference={updatePreference}
               onOpenDetails={(cafe) => void openDetails(cafe)}
               onSave={(cafe) => void toggleFavorite(cafe)}
-              onLike={(cafe) => void performInteraction(cafe, "LIKE")}
+              onLike={(cafe) => void toggleLike(cafe)}
               onDismiss={(cafe) => void performInteraction(cafe, "NOT_INTERESTED")}
             />
           )}
@@ -646,7 +672,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
               onDiscover={() => selectTab("discover")}
               onDetails={(cafe) => void openDetails(cafe)}
               onSave={(cafe) => void toggleFavorite(cafe)}
-              onLike={(cafe) => void performInteraction(cafe, "LIKE")}
+              onLike={(cafe) => void toggleLike(cafe)}
               onDismiss={(cafe) => void performInteraction(cafe, "NOT_INTERESTED")}
             />
           )}
@@ -666,15 +692,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
           {activeTab === "profile" && (
             <ProfileTab
               email={session.user.email}
-              preferenceDraft={preferenceDraft}
-              loading={preferenceLoading}
-              saving={preferenceSaving}
-              message={preferenceMessage}
-              error={preferenceError}
-              onSave={savePreferences}
-              onRetry={() => void loadPreference(session.access_token)}
-              onTogglePurpose={togglePurpose}
-              onUpdatePreference={updatePreference}
+              onRequestSignOut={() => { setLogoutError(""); setLogoutDialogOpen(true); }}
             />
           )}
         </div>
@@ -696,7 +714,7 @@ export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
         </div>
       </nav>
 
-      {selectedCafe && <CafeDetailDialog cafe={selectedCafe} isSaved={savedIds.includes(selectedCafe.placeId)} onClose={() => setSelectedCafe(null)} onSave={() => void toggleFavorite(selectedCafe)} onLike={() => void performInteraction(selectedCafe, "LIKE")} onVisited={() => void performInteraction(selectedCafe, "VISITED")} />}
+      {selectedCafe && <CafeDetailDialog token={session.access_token} cafe={selectedCafe} isSaved={savedIds.includes(selectedCafe.placeId)} isLiked={likedIds.includes(selectedCafe.placeId)} busy={busyPlaceId === selectedCafe.placeId} onClose={() => setSelectedCafe(null)} onSave={() => void toggleFavorite(selectedCafe)} onLike={() => void toggleLike(selectedCafe)} onVisited={() => void performInteraction(selectedCafe, "VISITED")} />}
       {logoutDialogOpen && <LogoutDialog busy={logoutBusy} error={logoutError} onCancel={() => setLogoutDialogOpen(false)} onConfirm={() => void confirmSignOut()} />}
     </main>
   );

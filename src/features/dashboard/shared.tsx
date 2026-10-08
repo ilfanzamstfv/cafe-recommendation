@@ -32,11 +32,17 @@ export function CafePhoto({
 }) {
   const photoRef = useRef<HTMLDivElement>(null);
   const [imageSrc, setImageSrc] = useState("");
+  const [photoStatus, setPhotoStatus] = useState<"loading" | "loaded" | "unavailable">("loading");
 
   useEffect(() => {
     const photoName = cafe.photoName;
     const element = photoRef.current;
-    if (!photoName || !element) return;
+    setImageSrc("");
+    setPhotoStatus("loading");
+    if (!photoName || !element) {
+      setPhotoStatus("unavailable");
+      return;
+    }
 
     const controller = new AbortController();
     let objectUrl = "";
@@ -47,13 +53,15 @@ export function CafePhoto({
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
         });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error("Photo request failed");
         const blob = await response.blob();
+        if (!blob.type.toLowerCase().startsWith("image/")) throw new Error("Invalid photo response");
         if (controller.signal.aborted) return;
         objectUrl = URL.createObjectURL(blob);
         setImageSrc(objectUrl);
+        setPhotoStatus("loaded");
       } catch {
-        // Keep the neutral fallback visible when a photo cannot be loaded.
+        if (!controller.signal.aborted) setPhotoStatus("unavailable");
       }
     };
 
@@ -90,11 +98,15 @@ export function CafePhoto({
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
             unoptimized
-            onError={() => setImageSrc("")}
+            onError={() => { setImageSrc(""); setPhotoStatus("unavailable"); }}
             className="object-cover"
           />
         ) : (
-          <div role="img" className="grid size-full place-items-center text-[#717744]" aria-label={`No photo available for ${cafe.name}`}>
+          <div
+            role={photoStatus === "loading" ? "status" : "img"}
+            className="grid size-full place-items-center gap-2 px-3 text-center text-[#717744]"
+            aria-label={photoStatus === "loading" ? `Loading photo for ${cafe.name}` : cafe.photoName ? `Photo unavailable for ${cafe.name}` : `No photo available for ${cafe.name}`}
+          >
             <Coffee size={34} strokeWidth={1.5} aria-hidden="true" />
           </div>
         )}
@@ -125,6 +137,7 @@ export function CafeCard({
   isLiked,
   busy,
   detailsLoading,
+  showDismiss = true,
   onDetails,
   onSave,
   onLike,
@@ -136,6 +149,7 @@ export function CafeCard({
   isLiked: boolean;
   busy: boolean;
   detailsLoading: boolean;
+  showDismiss?: boolean;
   onDetails: () => void;
   onSave: () => void;
   onLike: () => void;
@@ -196,25 +210,27 @@ export function CafeCard({
           </button>
           <button
             type="button"
-            title="Like cafe"
-            aria-label={`Like ${cafe.name}`}
+            title={isLiked ? "Unlike cafe" : "Like cafe"}
+            aria-label={`${isLiked ? "Unlike" : "Like"} ${cafe.name}`}
             aria-pressed={isLiked}
             onClick={onLike}
-            disabled={busy || isLiked}
+            disabled={busy}
             className={`grid size-11 shrink-0 place-items-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] focus-visible:ring-offset-2 disabled:opacity-60 ${isLiked ? "border-[#717744] bg-[#bcbd8b]/50 text-[#373d20]" : "border-[#717744]/40 bg-white text-[#373d20] hover:bg-[#bcbd8b]/30"}`}
           >
             <Heart size={18} fill={isLiked ? "currentColor" : "none"} aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            title="Not interested"
-            aria-label={`Not interested in ${cafe.name}`}
-            onClick={onDismiss}
-            disabled={busy}
-            className="grid size-11 shrink-0 place-items-center rounded-md border border-[#717744]/40 bg-white text-[#717744] transition-colors hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] focus-visible:ring-offset-2 disabled:opacity-60"
-          >
-            <ThumbsDown size={18} aria-hidden="true" />
-          </button>
+          {showDismiss && (
+            <button
+              type="button"
+              title="Not interested"
+              aria-label={`Not interested in ${cafe.name}`}
+              onClick={onDismiss}
+              disabled={busy}
+              className="grid size-11 shrink-0 place-items-center rounded-md border border-[#717744]/40 bg-white text-[#717744] transition-colors hover:bg-[#eff1ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#717744] focus-visible:ring-offset-2 disabled:opacity-60"
+            >
+              <ThumbsDown size={18} aria-hidden="true" />
+            </button>
+          )}
           <a
             href={getMapUrl(cafe)}
             target="_blank"

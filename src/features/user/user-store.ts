@@ -5,6 +5,7 @@ import type {
   UserPreference,
 } from "@/types/cafe";
 import type { AuthContext } from "@/lib/supabase/server";
+import { getCurrentLikedPlaceIds } from "@/features/user/current-liked-place-ids";
 
 type PreferenceRow = {
   max_distance_km: number;
@@ -196,15 +197,14 @@ export async function addInteraction(
 }
 
 export async function getInteractionSignal(auth: AuthContext): Promise<UserInteractionSignal> {
-  const interactions = await listInteractions(auth);
+  const [interactions, savedPlaceIds] = await Promise.all([
+    listInteractions(auth),
+    listFavorites(auth),
+  ]);
 
   return {
-    likedPlaceIds: interactions
-      .filter((interaction) => interaction.interactionType === "LIKE")
-      .map((interaction) => interaction.placeId),
-    savedPlaceIds: interactions
-      .filter((interaction) => interaction.interactionType === "SAVE")
-      .map((interaction) => interaction.placeId),
+    likedPlaceIds: getCurrentLikedPlaceIds(interactions),
+    savedPlaceIds,
     visitedPlaceIds: interactions
       .filter((interaction) => interaction.interactionType === "VISITED")
       .map((interaction) => interaction.placeId),
@@ -219,6 +219,7 @@ export async function getInteractionHistory(auth: AuthContext) {
 
   return {
     liked: interactions.filter((interaction) => interaction.interactionType === "LIKE"),
+    unliked: interactions.filter((interaction) => interaction.interactionType === "UNLIKE"),
     saved: interactions.filter((interaction) => interaction.interactionType === "SAVE"),
     visited: interactions.filter((interaction) => interaction.interactionType === "VISITED"),
     notInterested: interactions.filter(

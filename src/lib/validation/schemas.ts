@@ -22,7 +22,7 @@ export const preferenceSchema = z.object({
 
 export const interactionSchema = z.object({
   placeId: z.string().min(1),
-  interactionType: z.enum(["LIKE", "SAVE", "VISITED", "NOT_INTERESTED"]),
+  interactionType: z.enum(["LIKE", "UNLIKE", "SAVE", "VISITED", "NOT_INTERESTED"]),
 });
 
 export const favoriteSchema = z.object({

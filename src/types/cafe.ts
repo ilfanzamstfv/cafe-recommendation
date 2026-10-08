@@ -8,7 +8,7 @@ export type Purpose =
   | "MEETING"
   | "QUICK_COFFEE";
 
-export type InteractionType = "LIKE" | "SAVE" | "VISITED" | "NOT_INTERESTED";
+export type InteractionType = "LIKE" | "UNLIKE" | "SAVE" | "VISITED" | "NOT_INTERESTED";
 
 export type Coordinates = {
   latitude: number;
