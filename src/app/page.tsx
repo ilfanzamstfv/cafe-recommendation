@@ -1,5 +1,5 @@
-import { ProtectedHome } from "./protected-home";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <ProtectedHome />;
+  redirect("/pages/discover");
 }

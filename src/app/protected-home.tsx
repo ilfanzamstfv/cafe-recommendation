@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   Bookmark,
   Check,
@@ -12,9 +13,10 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { getDistanceKm } from "@/lib/geo/distance";
 import type {
   Cafe,
   Coordinates,
@@ -23,10 +25,10 @@ import type {
   RecommendedCafe,
   UserPreference,
 } from "@/types/cafe";
-import { DiscoverTab } from "@/features/dashboard/tabs/discover";
-import { HistoryTab } from "@/features/dashboard/tabs/history";
-import { ProfileTab } from "@/features/dashboard/tabs/profile";
-import { SavedTab } from "@/features/dashboard/tabs/saved";
+import { DiscoverTab } from "@/app/pages/discover";
+import { HistoryTab } from "@/app/pages/history";
+import { ProfileTab } from "@/app/pages/profile";
+import { SavedTab } from "@/app/pages/saved";
 import { formatCount, formatDistance, formatPrice, getMapUrl, SkeletonRows } from "@/features/dashboard/shared";
 import type { CafeDetail, HistoryEntry, Tab } from "@/features/dashboard/types";
 
@@ -191,15 +193,16 @@ function LogoutDialog({
   );
 }
 
-export function ProtectedHome() {
+export function ProtectedHome({ activeTab }: { activeTab: Tab }) {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("discover");
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
   const [latitudeInput, setLatitudeInput] = useState("");
   const [longitudeInput, setLongitudeInput] = useState("");
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationError, setLocationError] = useState("");
+  const [locationMessage, setLocationMessage] = useState("");
   const [radius, setRadius] = useState(3000);
   const [cafes, setCafes] = useState<RecommendedCafe[]>([]);
   const [source, setSource] = useState<"google_places" | "mock" | "">("");
@@ -228,6 +231,8 @@ export function ProtectedHome() {
   const [selectedCafe, setSelectedCafe] = useState<CafeDetail | null>(null);
   const [detailsLoadingId, setDetailsLoadingId] = useState("");
   const supabaseRef = useRef<ReturnType<typeof createBrowserSupabaseClient> | null>(null);
+  const locationRequestIdRef = useRef(0);
+  const autoLocationRequestedRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -249,6 +254,7 @@ export function ProtectedHome() {
       }
       setSession(data.session);
       setAuthLoading(false);
+      loadTabData(activeTab, data.session.access_token);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -265,7 +271,7 @@ export function ProtectedHome() {
     };
   }, []);
 
-  async function loadRecommendations(token: string, origin: Coordinates, distance: number) {
+  const loadRecommendations = useCallback(async (token: string, origin: Coordinates, distance: number) => {
     setSearchLoading(true);
     setSearchError("");
     const params = new URLSearchParams({
@@ -292,42 +298,60 @@ export function ProtectedHome() {
     } finally {
       setSearchLoading(false);
     }
-  }
+  }, []);
 
-  function useCurrentLocation() {
+  const useCurrentLocation = useCallback(() => {
     if (!session) return;
+    setLocationError("");
+    setLocationMessage("");
     if (!navigator.geolocation) {
       setLocationError("This browser does not support location. Enter coordinates manually.");
       return;
     }
 
+    const requestId = ++locationRequestIdRef.current;
     setLocationBusy(true);
-    setLocationError("");
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (requestId !== locationRequestIdRef.current) return;
         const origin = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         };
+        setLocationBusy(false);
+        // ponytail: fixed 100 m jitter filter; use GPS accuracy if device noise causes excess searches.
+        if (coordinates && getDistanceKm(coordinates, origin) < 0.1) {
+          setLocationMessage("Location is within 100 m of the current coordinates. Use Search cafes to query again.");
+          return;
+        }
         setCoordinates(origin);
         setLatitudeInput(String(origin.latitude));
         setLongitudeInput(String(origin.longitude));
-        setLocationBusy(false);
         void loadRecommendations(session.access_token, origin, radius);
       },
       (error) => {
+        if (requestId !== locationRequestIdRef.current) return;
         setLocationBusy(false);
         setLocationError(error.code === error.PERMISSION_DENIED
           ? "Izin lokasi ditolak. Masukkan koordinat secara manual untuk mencari café."
           : "Lokasi tidak berhasil diperoleh. Coba lagi atau masukkan koordinat manual.");
       },
-      { enableHighAccuracy: false, maximumAge: 300000, timeout: 12000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
-  }
+  }, [coordinates, loadRecommendations, radius, session]);
+
+  useEffect(() => {
+    if (authLoading || !session || activeTab !== "discover" || autoLocationRequestedRef.current) return;
+    autoLocationRequestedRef.current = true;
+    useCurrentLocation();
+  }, [activeTab, authLoading, session, useCurrentLocation]);
 
   function submitManualLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!session) return;
+    locationRequestIdRef.current += 1;
+    setLocationBusy(false);
+    setLocationMessage("");
     const latitude = Number(latitudeInput);
     const longitude = Number(longitudeInput);
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
@@ -337,12 +361,13 @@ export function ProtectedHome() {
     const origin = { latitude, longitude };
     setCoordinates(origin);
     setLocationError("");
+    setLocationMessage("");
     void loadRecommendations(session.access_token, origin, radius);
   }
 
-  function submitSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (session && coordinates) void loadRecommendations(session.access_token, coordinates, radius);
+  function updateRadius(distance: number) {
+    setRadius(distance);
+    if (session && coordinates) void loadRecommendations(session.access_token, coordinates, distance);
   }
 
   async function loadFavorites(token: string) {
@@ -392,12 +417,16 @@ export function ProtectedHome() {
     }
   }
 
+  function loadTabData(tab: Tab, token: string) {
+    if (tab === "favorites" && favorites === null && !favoritesLoading) void loadFavorites(token);
+    if (tab === "history" && history === null && !historyLoading) void loadHistory(token);
+    if (tab === "profile" && preferenceDraft === null && !preferenceLoading) void loadPreference(token);
+  }
+
   function selectTab(tab: Tab) {
-    setActiveTab(tab);
-    if (!session) return;
-    if (tab === "favorites" && favorites === null && !favoritesLoading) void loadFavorites(session.access_token);
-    if (tab === "history" && history === null && !historyLoading) void loadHistory(session.access_token);
-    if (tab === "profile" && preferenceDraft === null && !preferenceLoading) void loadPreference(session.access_token);
+    if (tab === activeTab) return;
+    if (session) loadTabData(tab, session.access_token);
+    router.push(`/pages/${tab === "favorites" ? "saved" : tab}`);
   }
 
   async function performInteraction(cafe: CafeDetail, interactionType: InteractionType) {
@@ -577,6 +606,7 @@ export function ProtectedHome() {
               longitudeInput={longitudeInput}
               locationBusy={locationBusy}
               locationError={locationError}
+              locationMessage={locationMessage}
               radius={radius}
               cafes={cafes}
               source={source}
@@ -590,10 +620,9 @@ export function ProtectedHome() {
               mobileView={mobileView}
               onLatitudeChange={setLatitudeInput}
               onLongitudeChange={setLongitudeInput}
-              onRadiusChange={setRadius}
+              onRadiusChange={updateRadius}
               onMobileViewChange={setMobileView}
               onUseCurrentLocation={useCurrentLocation}
-              onSearchSubmit={submitSearch}
               onManualLocationSubmit={submitManualLocation}
               onRetrySearch={() => { if (coordinates) void loadRecommendations(session.access_token, coordinates, radius); }}
               onOpenDetails={(cafe) => void openDetails(cafe)}
@@ -636,6 +665,7 @@ export function ProtectedHome() {
 
           {activeTab === "profile" && (
             <ProfileTab
+              email={session.user.email}
               preferenceDraft={preferenceDraft}
               loading={preferenceLoading}
               saving={preferenceSaving}
